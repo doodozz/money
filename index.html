@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jukjae's Wealth Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        .active-tab { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: bold; }
+        body { padding-bottom: 80px; } /* 為底部導覽列留空間 */
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-xl relative">
+        
+        <header class="p-4 border-b bg-white sticky top-0 z-10">
+            <h1 class="text-xl font-bold text-center text-slate-800 tracking-wide">理財導航員 🚀</h1>
+        </header>
+
+        <main class="p-4">
+            <div v-if="currentTab === 'asset'">
+                <section class="mb-6">
+                    <h2 class="text-lg font-bold mb-4 border-l-4 border-blue-500 pl-2">總資產概覽</h2>
+                    <div class="bg-gradient-to-br from-blue-500 to-indigo-600 p-6 rounded-2xl text-white shadow-lg">
+                        <p class="opacity-80 text-sm">估算總資產 (台股+美股+現金)</p>
+                        <p class="text-3xl font-black mt-1">${{ totalAssets.toLocaleString() }}</p>
+                    </div>
+                </section>
+
+                <div class="space-y-4">
+                    <div v-for="(val, key) in assetDetailed" :key="key" class="p-4 border rounded-xl flex justify-between items-center bg-white shadow-sm">
+                        <span class="text-slate-600 font-medium">{{ key }}</span>
+                        <span class="text-lg font-bold text-slate-800">${{ val.toLocaleString() }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'position'">
+                <div class="flex gap-2 mb-4 bg-gray-100 p-1 rounded-lg">
+                    <button v-for="m in ['台股', '美股']" @click="market = m" :class="['flex-1 py-1 rounded-md text-sm', market === m ? 'bg-white shadow' : '']">{{ m }}</button>
+                </div>
+
+                <div class="mb-6 bg-blue-50 p-4 rounded-xl">
+                    <h3 class="text-sm text-blue-600 font-bold mb-2">新增持股</h3>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <input v-model="newItem.name" placeholder="代碼" class="p-2 border rounded">
+                        <select v-model="newItem.type" class="p-2 border rounded">
+                            <option value="個股">個股</option>
+                            <option value="定期定額">定期定額</option>
+                        </select>
+                        <input v-model.number="newItem.cost" type="number" placeholder="成本" class="p-2 border rounded">
+                        <input v-model.number="newItem.shares" type="number" placeholder="股數" class="p-2 border rounded">
+                        <input v-model.number="newItem.currentPrice" type="number" placeholder="現價" class="p-2 border rounded">
+                        <button @click="addStock" class="bg-blue-500 text-white rounded font-bold">新增</button>
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div v-for="(stock, idx) in filteredStocks" :key="idx" class="border rounded-xl p-4 bg-white hover:shadow-md transition">
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="bg-slate-200 text-[10px] px-2 py-0.5 rounded-full">{{ stock.type }}</span>
+                                <h3 class="font-bold text-lg">{{ stock.name }}</h3>
+                            </div>
+                            <button @click="removeStock(idx)" class="text-gray-300 hover:text-red-500">✕</button>
+                        </div>
+                        <div class="grid grid-cols-3 text-center text-sm">
+                            <div><p class="text-gray-400 text-xs">市值</p><p class="font-bold">${{ (stock.currentPrice * stock.shares).toLocaleString() }}</p></div>
+                            <div><p class="text-gray-400 text-xs">占比</p><p class="text-blue-500">{{ getRatio(stock) }}%</p></div>
+                            <div><p class="text-gray-400 text-xs">損益</p><p :class="stock.currentPrice >= stock.cost ? 'text-red-500' : 'text-green-500'">{{ (((stock.currentPrice/stock.cost)-1)*100).toFixed(2) }}%</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'profit'">
+                <h2 class="text-lg font-bold mb-4 border-l-4 border-yellow-500 pl-2">智慧停利計算機</h2>
+                <div v-if="stocks.length === 0" class="text-center py-10 text-gray-400">請先在「倉位」分頁新增股票</div>
+                <div v-else class="space-y-6">
+                    <div>
+                        <label class="text-sm font-bold">選擇目標股票：</label>
+                        <select v-model="selectedStockIdx" class="w-full p-3 border rounded-xl mt-2">
+                            <option v-for="(s, i) in stocks" :key="i" :value="i">{{ s.name }} (均價:{{s.cost}})</option>
+                        </select>
+                    </div>
+
+                    <div v-if="selectedStockIdx !== null" class="bg-yellow-50 p-5 rounded-2xl space-y-4">
+                        <div class="flex justify-between border-b border-yellow-200 pb-2">
+                            <span>出一半已實現獲利</span>
+                            <span class="font-bold text-red-600">${{ profitCalc.realized.toLocaleString() }}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-yellow-200 pb-2">
+                            <span>剩餘每股成本</span>
+                            <span class="font-bold text-blue-600">${{ profitCalc.remainingCost.toFixed(2) }}</span>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow-inner text-center">
+                            <p class="text-xs text-gray-500 mb-1">建議移動停利價</p>
+                            <p class="text-2xl font-black text-orange-500">${{ profitCalc.stopPrice.toFixed(2) }}</p>
+                            <p class="text-[10px] text-gray-400 mt-2">※ 規則：獲利回吐不超過一半</p>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-500">參考均線 (MA)</label>
+                            <input type="text" placeholder="MA20" class="w-full p-2 mt-1 border rounded text-sm bg-white" v-model="maTarget">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="currentTab === 'reserve'">
+                <h2 class="text-lg font-bold mb-4 border-l-4 border-green-500 pl-2">預備金規劃</h2>
+                
+                <div class="space-y-6">
+                    <div class="p-4 bg-white border-2 border-green-100 rounded-2xl shadow-sm">
+                        <p class="font-bold text-green-700 flex items-center">🧱 第一層：生存現金</p>
+                        <div class="mt-3 flex gap-2 items-center">
+                            <input v-model.number="monthlyEx" type="number" placeholder="月開銷" class="flex-1 p-2 border rounded text-sm">
+                            <select v-model="reserveMonths" class="p-2 border rounded text-sm">
+                                <option :value="6">6個月</option>
+                                <option :value="9">9個月</option>
+                            </select>
+                        </div>
+                        <p class="mt-2 text-sm text-gray-600 font-bold">需儲備：${{ (monthlyEx * reserveMonths).toLocaleString() }}</p>
+                    </div>
+
+                    <div class="p-4 bg-white border-2 border-blue-100 rounded-2xl shadow-sm">
+                        <p class="font-bold text-blue-700">🧱 第二層：加碼現金</p>
+                        <p class="text-xs text-gray-500 mt-1">依倉位市值 ({{totalMarketValue}}) 計算</p>
+                        <div class="flex justify-between mt-3">
+                            <div class="text-center flex-1">
+                                <p class="text-[10px]">10%</p>
+                                <p class="font-bold">${{ (totalMarketValue * 0.1).toFixed(0) }}</p>
+                            </div>
+                            <div class="text-center flex-1 border-l">
+                                <p class="text-[10px]">15%</p>
+                                <p class="font-bold">${{ (totalMarketValue * 0.15).toFixed(0) }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-white border-2 border-purple-100 rounded-2xl shadow-sm">
+                        <p class="font-bold text-purple-700">🧱 第三層：未來花費</p>
+                        <div v-for="(item, i) in futureEx" :key="i" class="flex gap-2 mt-2">
+                            <input v-model="item.name" class="flex-1 p-1 border rounded text-xs">
+                            <input v-model.number="item.amount" type="number" class="w-24 p-1 border rounded text-xs">
+                        </div>
+                        <button @click="futureEx.push({name:'', amount:0})" class="mt-2 text-xs text-purple-500">+ 新增項目</button>
+                    </div>
+
+                    <div class="bg-slate-800 p-5 rounded-2xl text-white text-center">
+                        <p class="text-xs opacity-70">預備金總額統計</p>
+                        <p class="text-2xl font-bold">${{ totalReserve.toLocaleString() }}</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <nav class="fixed bottom-0 max-w-md w-full bg-white border-t flex justify-around py-3 text-xs text-gray-500 shadow-2xl">
+            <button @click="currentTab = 'asset'" :class="{'text-blue-500 font-bold': currentTab === 'asset'}">
+                <p class="text-xl">💰</p>資產
+            </button>
+            <button @click="currentTab = 'position'" :class="{'text-blue-500 font-bold': currentTab === 'position'}">
+                <p class="text-xl">📊</p>倉位
+            </button>
+            <button @click="currentTab = 'profit'" :class="{'text-blue-500 font-bold': currentTab === 'profit'}">
+                <p class="text-xl">🎯</p>停利
+            </button>
+            <button @click="currentTab = 'reserve'" :class="{'text-blue-500 font-bold': currentTab === 'reserve'}">
+                <p class="text-xl">🛡️</p>預備金
+            </button>
+        </nav>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, watch, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('asset');
+                const market = ref('台股');
+                const stocks = ref([]);
+                const newItem = ref({ name: '', market: '台股', type: '個股', cost: null, shares: null, currentPrice: null });
+                
+                // 停利與預備金變數
+                const selectedStockIdx = ref(null);
+                const maTarget = ref('MA20');
+                const monthlyEx = ref(0);
+                const reserveMonths = ref(6);
+                const futureEx = ref([{ name: '旅行/大件物品', amount: 0 }]);
+
+                onMounted(() => {
+                    const saved = localStorage.getItem('wealth-data');
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        stocks.value = data.stocks || [];
+                        monthlyEx.value = data.monthlyEx || 0;
+                        futureEx.value = data.futureEx || [];
+                    }
+                });
+
+                watch([stocks, monthlyEx, futureEx], () => {
+                    localStorage.setItem('wealth-data', JSON.stringify({
+                        stocks: stocks.value,
+                        monthlyEx: monthlyEx.value,
+                        futureEx: futureEx.value
+                    }));
+                }, { deep: true });
+
+                const addStock = () => {
+                    if (newItem.value.name && newItem.value.cost > 0) {
+                        stocks.value.push({ ...newItem.value, market: market.value });
+                        newItem.value = { name: '', market: market.value, type: '個股', cost: null, shares: null, currentPrice: null };
+                    }
+                };
+
+                const removeStock = (idx) => stocks.value.splice(idx, 1);
+
+                const filteredStocks = computed(() => stocks.value.filter(s => s.market === market.value));
+
+                const totalMarketValue = computed(() => stocks.value.reduce((s, x) => s + (x.currentPrice * x.shares), 0));
+
+                const assetDetailed = computed(() => {
+                    const res = { "台股-定期定額": 0, "台股-個股": 0, "美股-定期定額": 0, "美股-個股": 0 };
+                    stocks.value.forEach(s => {
+                        const key = `${s.market}-${s.type}`;
+                        res[key] += (s.currentPrice * s.shares);
+                    });
+                    return res;
+                });
+
+                const totalAssets = computed(() => totalMarketValue.value);
+
+                const getRatio = (stock) => {
+                    if (totalMarketValue.value === 0) return 0;
+                    return ((stock.currentPrice * stock.shares / totalMarketValue.value) * 100).toFixed(1);
+                };
+
+                const profitCalc = computed(() => {
+                    if (selectedStockIdx.value === null) return {};
+                    const s = stocks.value[selectedStockIdx.value];
+                    const realized = (s.currentPrice - s.cost) * (s.shares / 2);
+                    const remCost = s.cost - (realized / (s.shares / 2));
+                    const stopPrice = s.currentPrice - (realized / 2 / (s.shares / 2));
+                    return { realized, remainingCost: remCost, stopPrice };
+                });
+
+                const totalReserve = computed(() => {
+                    const s1 = monthlyEx.value * reserveMonths.value;
+                    const s2 = totalMarketValue.value * 0.125; // 取 10-15% 中間值
+                    const s3 = futureEx.value.reduce((s, x) => s + (x.amount || 0), 0);
+                    return s1 + s2 + s3;
+                });
+
+                return { 
+                    currentTab, market, stocks, newItem, addStock, removeStock, 
+                    filteredStocks, totalMarketValue, assetDetailed, totalAssets,
+                    getRatio, selectedStockIdx, profitCalc, maTarget,
+                    monthlyEx, reserveMonths, futureEx, totalReserve
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
