@@ -7,10 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
-        body { padding-bottom: 90px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif; }
+        body { padding-bottom: 100px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif; }
         .card-shadow { box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
         input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         * { font-style: normal !important; }
+        /* 針對底部導航文字微調 */
+        .nav-text { font-size: 13px !important; letter-spacing: 1px !important; margin-top: 4px; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -85,18 +87,34 @@
                             <input v-model.number="exchangeRate" type="number" class="w-10 bg-transparent text-xs font-bold text-indigo-700 outline-none">
                         </div>
                         <button @click="usdMode = !usdMode" class="bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow-md">
-                            {{ usdMode ? '美金' : '台幣' }}
+                            {{ usdMode ? 'USD' : 'TWD' }}
                         </button>
                     </div>
                 </div>
 
+                <div class="bg-blue-600 rounded-3xl p-6 mb-6 text-white shadow-lg relative overflow-hidden">
+                    <div class="relative z-10">
+                        <p class="text-[10px] font-bold opacity-70 uppercase tracking-widest mb-1">{{ market }}當前市值</p>
+                        <h2 class="text-3xl font-black mb-4">{{ formatDisplayPrice(market === '台股' ? totalTWValue : (totalUSValueInTWD / exchangeRate)) }}</h2>
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <p class="text-[10px] font-bold opacity-70 uppercase tracking-widest mb-1">平均損益</p>
+                                <p class="text-xl font-black" :class="marketStats.profit >= 0 ? 'text-red-300' : 'text-green-300'">
+                                    {{ marketStats.profit >= 0 ? '+' : '' }}{{ marketStats.profit.toFixed(2) }}%
+                                </p>
+                            </div>
+                            <p class="text-[10px] font-black bg-blue-500 px-3 py-1 rounded-full uppercase tracking-widest">佔總持股 {{ marketStats.ratio }}%</p>
+                        </div>
+                    </div>
+                    <div class="absolute -right-4 -bottom-4 text-7xl opacity-10 font-black italic">{{ market === '台股' ? 'TW' : 'US' }}</div>
+                </div>
+
                 <div class="space-y-4">
-                    <div v-for="(stock, idx) in filteredStocks" :key="idx" class="border border-slate-100 rounded-3xl p-5 bg-white card-shadow relative">
+                    <div v-for="(stock, idx) in filteredStocks" :key="stock.id" class="border border-slate-100 rounded-3xl p-5 bg-white card-shadow relative">
                         <div class="absolute top-5 right-5 flex gap-3">
                             <button @click="openEditModal(stock)" class="text-slate-300 hover:text-blue-500 transition text-lg">✎</button>
                             <button @click="removeStock(stock)" class="text-slate-200 hover:text-red-400 transition text-lg">✕</button>
                         </div>
-
                         <div class="flex justify-between items-start mb-4">
                             <div>
                                 <span class="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">{{ stock.type }}</span>
@@ -109,7 +127,7 @@
                                 <p class="font-black text-slate-700 text-sm">{{ formatDisplayPrice(stock.currentPrice * stock.shares) }}</p>
                             </div>
                             <div class="bg-slate-50 p-3 rounded-2xl text-center">
-                                <p class="text-[10px] text-gray-400 font-bold mb-1">總佔比</p>
+                                <p class="text-[10px] text-gray-400 font-bold mb-1">佔比</p>
                                 <p class="font-black text-blue-600 text-sm">{{ getRatio(stock) }}%</p>
                             </div>
                             <div class="bg-slate-50 p-3 rounded-2xl text-center">
@@ -121,7 +139,7 @@
                         </div>
                     </div>
                 </div>
-                <button @click="openAddModal" class="w-full mt-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold hover:border-blue-300 transition">＋ 新增持股紀錄</button>
+                <button @click="openAddModal" class="w-full mt-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold hover:border-blue-300 transition uppercase tracking-widest text-xs">＋ 新增持股紀錄</button>
 
                 <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
                     <div class="bg-white w-full rounded-[2.5rem] p-6 shadow-2xl">
@@ -159,20 +177,17 @@
                         <div v-if="stocks[selectedStockIdx].currentPrice < stocks[selectedStockIdx].cost" class="text-center py-10">
                             <p class="text-4xl mb-4">📉</p>
                             <p class="font-black text-orange-800">目前為虧損狀態</p>
-                            <p class="text-[10px] text-orange-400 mt-2 font-bold">暫無獲利可計算</p>
                         </div>
 
                         <div v-else class="space-y-6">
                             <div class="flex justify-between items-center border-b border-orange-200 pb-4">
-                                <span class="font-bold text-orange-800">出一半實現獲利</span>
+                                <span class="font-bold text-orange-800 text-sm">出一半實現獲利</span>
                                 <span class="font-black text-red-600 text-xl">+ {{ (profitCalc.realized).toLocaleString() }}</span>
                             </div>
-
                             <div class="flex justify-between items-center border-b border-orange-200 pb-4">
-                                <span class="font-bold text-orange-800">保本成本防線</span>
+                                <span class="font-bold text-orange-800 text-sm">保本成本防線</span>
                                 <span class="font-black text-emerald-600 text-xl">{{ profitCalc.remainingCost.toFixed(2) }}</span>
                             </div>
-
                             <div class="bg-white p-6 rounded-3xl shadow-sm text-center border border-orange-200">
                                 <p class="text-[10px] text-gray-400 font-black uppercase mb-2 tracking-widest">建議停利參考價</p>
                                 <p class="text-4xl font-black text-orange-600">${{ profitCalc.stopPrice.toFixed(2) }}</p>
@@ -248,7 +263,7 @@
         <nav class="fixed bottom-0 max-w-md w-full bg-white/95 backdrop-blur-md border-t border-slate-100 flex justify-around py-4 z-30 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
             <button v-for="t in ['asset','position','profit','reserve']" @click="currentTab = t" :class="['flex flex-col items-center transition-all duration-300', currentTab === t ? 'scale-110 text-blue-600' : 'text-slate-300']">
                 <span class="text-2xl mb-1">{{ {asset:'💰', position:'📊', profit:'🎯', reserve:'🛡️'}[t] }}</span>
-                <span class="text-[9px] font-black uppercase tracking-widest">{{ {asset:'資產', position:'倉位', profit:'停利', reserve:'預備金'}[t] }}</span>
+                <span class="nav-text font-black uppercase">{{ {asset:'資產', position:'倉位', profit:'停利', reserve:'預備金'}[t] }}</span>
             </button>
         </nav>
     </div>
@@ -263,7 +278,6 @@
                 const usdMode = ref(false);
                 const exchangeRate = ref(32.5); 
                 
-                // 彈窗狀態與編輯邏輯
                 const showModal = ref(false);
                 const isEditing = ref(false);
                 const editingId = ref(null);
@@ -280,7 +294,7 @@
                 const newManual = ref({ name: '', amount: null });
 
                 onMounted(() => {
-                    const saved = localStorage.getItem('wealth-master-v7');
+                    const saved = localStorage.getItem('wealth-master-final-v2');
                     if (saved) {
                         const d = JSON.parse(saved);
                         stocks.value = d.stocks || [];
@@ -296,30 +310,17 @@
                 });
 
                 watch([stocks, monthlyEx, reserveMonths, reserveRatio, futureEx, manualAssets, maData, exchangeRate, manualReserve], () => {
-                    localStorage.setItem('wealth-master-v7', JSON.stringify({
+                    localStorage.setItem('wealth-master-final-v2', JSON.stringify({
                         stocks: stocks.value, monthlyEx: monthlyEx.value, reserveMonths: reserveMonths.value,
                         reserveRatio: reserveRatio.value, futureEx: futureEx.value, manualAssets: manualAssets.value,
                         maData: maData.value, exchangeRate: exchangeRate.value, manualReserve: manualReserve.value
                     }));
                 }, { deep: true });
 
-                // 彈窗處理
-                const openAddModal = () => {
-                    isEditing.value = false;
-                    modalItem.value = { name: '', type: '個股', cost: null, shares: null, currentPrice: null };
-                    showModal.value = true;
-                };
-
-                const openEditModal = (stock) => {
-                    isEditing.value = true;
-                    editingId.value = stock.id;
-                    modalItem.value = { ...stock };
-                    showModal.value = true;
-                };
-
+                const openAddModal = () => { isEditing.value = false; modalItem.value = { name: '', type: '個股', cost: null, shares: null, currentPrice: null }; showModal.value = true; };
+                const openEditModal = (stock) => { isEditing.value = true; editingId.value = stock.id; modalItem.value = { ...stock }; showModal.value = true; };
                 const handleModalSubmit = () => {
                     if (!modalItem.value.name || modalItem.value.cost <= 0) return;
-                    
                     if (isEditing.value) {
                         const index = stocks.value.findIndex(s => s.id === editingId.value);
                         if (index !== -1) stocks.value[index] = { ...modalItem.value };
@@ -329,22 +330,10 @@
                     showModal.value = false;
                 };
 
-                const addManual = () => {
-                    if (newManual.value.name && newManual.value.amount) {
-                        manualAssets.value.push({ id: Date.now(), name: newManual.value.name, amount: newManual.value.amount });
-                        newManual.value = { name: '', amount: null };
-                    }
-                };
-
+                const addManual = () => { if (newManual.value.name && newManual.value.amount) { manualAssets.value.push({ id: Date.now(), name: newManual.value.name, amount: newManual.value.amount }); newManual.value = { name: '', amount: null }; } };
                 const deleteManualAsset = (id) => { manualAssets.value = manualAssets.value.filter(item => item.id !== id); };
                 const manualAssetsReversed = computed(() => [...manualAssets.value].reverse());
-                
-                const removeStock = (stock) => {
-                    if(confirm(`確定要刪除 ${stock.name} 嗎？`)) {
-                        stocks.value = stocks.value.filter(s => s.id !== stock.id);
-                    }
-                };
-
+                const removeStock = (stock) => { if(confirm(`確定刪除 ${stock.name}？`)) { stocks.value = stocks.value.filter(s => s.id !== stock.id); } };
                 const filteredStocks = computed(() => stocks.value.filter(s => s.market === market.value));
                 const totalTWValue = computed(() => stocks.value.filter(s => s.market === '台股').reduce((sum, s) => sum + (s.currentPrice * s.shares), 0));
                 const totalUSValueInTWD = computed(() => {
@@ -352,10 +341,7 @@
                     return usdSum * exchangeRate.value;
                 });
                 const totalMarketValueAll = computed(() => totalTWValue.value + totalUSValueInTWD.value);
-                const grandTotal = computed(() => {
-                    const manualSum = manualAssets.value.reduce((s, x) => s + (x.amount || 0), 0);
-                    return totalMarketValueAll.value + (manualReserve.value || 0) + manualSum;
-                });
+                const grandTotal = computed(() => (totalMarketValueAll.value + (manualReserve.value || 0) + manualAssets.value.reduce((s, x) => s + (x.amount || 0), 0)));
                 const currentCurrencyLabel = computed(() => (market.value === '美股' && usdMode.value) ? 'USD' : 'TWD');
                 const formatDisplayPrice = (val) => {
                     if (market.value === '美股' && usdMode.value) return val.toLocaleString(undefined, {minimumFractionDigits: 2});
@@ -367,6 +353,19 @@
                     if (stock.market === '美股') val *= exchangeRate.value;
                     return ((val / totalMarketValueAll.value) * 100).toFixed(1);
                 };
+                const marketStats = computed(() => {
+                    const list = filteredStocks.value;
+                    if (list.length === 0) return { profit: 0, ratio: 0 };
+                    const mTotal = list.reduce((s, x) => s + (x.currentPrice * x.shares), 0);
+                    const mCost = list.reduce((s, x) => s + (x.cost * x.shares), 0);
+                    let mRatio = 0;
+                    if (totalMarketValueAll.value > 0) {
+                        let tVal = mTotal;
+                        if (market.value === '美股') tVal *= exchangeRate.value;
+                        mRatio = ((tVal / totalMarketValueAll.value) * 100).toFixed(1);
+                    }
+                    return { profit: ((mTotal / mCost) - 1) * 100, ratio: mRatio };
+                });
                 const profitCalc = computed(() => {
                     if (selectedStockIdx.value === null) return {};
                     const s = stocks.value[selectedStockIdx.value];
@@ -384,7 +383,7 @@
 
                 return { 
                     currentTab, market, stocks, showModal, isEditing, modalItem, openAddModal, openEditModal, handleModalSubmit, removeStock, usdMode, exchangeRate,
-                    filteredStocks, totalTWValue, totalUSValueInTWD, totalMarketValueAll, grandTotal,
+                    filteredStocks, totalTWValue, totalUSValueInTWD, totalMarketValueAll, grandTotal, marketStats,
                     getRatio, formatDisplayPrice, currentCurrencyLabel,
                     selectedStockIdx, profitCalc, maData, monthlyEx, reserveMonths, reserveRatio, futureEx, totalReserve,
                     manualAssets, newManual, addManual, deleteManualAsset, manualAssetsReversed, manualReserve
