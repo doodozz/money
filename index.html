@@ -91,13 +91,17 @@
                 </div>
 
                 <div class="space-y-4">
-                    <div v-for="(stock, idx) in filteredStocks" :key="idx" class="border border-slate-100 rounded-3xl p-5 bg-white card-shadow">
+                    <div v-for="(stock, idx) in filteredStocks" :key="idx" class="border border-slate-100 rounded-3xl p-5 bg-white card-shadow relative">
+                        <div class="absolute top-5 right-5 flex gap-3">
+                            <button @click="openEditModal(stock)" class="text-slate-300 hover:text-blue-500 transition text-lg">✎</button>
+                            <button @click="removeStock(stock)" class="text-slate-200 hover:text-red-400 transition text-lg">✕</button>
+                        </div>
+
                         <div class="flex justify-between items-start mb-4">
                             <div>
                                 <span class="text-[10px] font-bold text-blue-400 uppercase tracking-tighter">{{ stock.type }}</span>
                                 <h3 class="font-black text-xl text-slate-800">{{ stock.name }}</h3>
                             </div>
-                            <button @click="removeStock(idx)" class="text-gray-200 hover:text-red-400 transition">✕</button>
                         </div>
                         <div class="grid grid-cols-3 gap-2">
                             <div class="bg-slate-50 p-3 rounded-2xl text-center">
@@ -117,26 +121,26 @@
                         </div>
                     </div>
                 </div>
-                <button @click="showAddModal = true" class="w-full mt-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold hover:border-blue-300 transition">＋ 新增持股紀錄</button>
+                <button @click="openAddModal" class="w-full mt-6 py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 font-bold hover:border-blue-300 transition">＋ 新增持股紀錄</button>
 
-                <div v-if="showAddModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
+                <div v-if="showModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
                     <div class="bg-white w-full rounded-[2.5rem] p-6 shadow-2xl">
-                        <h2 class="text-xl font-black mb-6">新增 {{ market }} 持股</h2>
+                        <h2 class="text-xl font-black mb-6">{{ isEditing ? '修改' : '新增' }} {{ market }} 持股</h2>
                         <div class="space-y-4">
-                            <input v-model="newItem.name" placeholder="股票名稱 / 代碼" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold">
-                            <select v-model="newItem.type" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold text-slate-500">
+                            <input v-model="modalItem.name" placeholder="股票名稱 / 代碼" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold">
+                            <select v-model="modalItem.type" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold text-slate-500">
                                 <option value="個股">個股</option>
                                 <option value="定期定額">定期定額</option>
                             </select>
                             <div class="grid grid-cols-2 gap-4">
-                                <input v-model.number="newItem.cost" type="number" placeholder="平均成本" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold">
-                                <input v-model.number="newItem.shares" type="number" placeholder="持股股數" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold">
+                                <input v-model.number="modalItem.cost" type="number" placeholder="平均成本" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold">
+                                <input v-model.number="modalItem.shares" type="number" placeholder="持股股數" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold">
                             </div>
-                            <input v-model.number="newItem.currentPrice" type="number" placeholder="目前現價" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold border-2 border-blue-100">
+                            <input v-model.number="modalItem.currentPrice" type="number" placeholder="目前現價" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold border-2 border-blue-100">
                         </div>
                         <div class="flex gap-4 mt-8">
-                            <button @click="showAddModal = false" class="flex-1 py-4 font-bold text-slate-400 uppercase tracking-widest text-xs">取消</button>
-                            <button @click="addStock" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg">確認新增</button>
+                            <button @click="showModal = false" class="flex-1 py-4 font-bold text-slate-400 uppercase tracking-widest text-xs">取消</button>
+                            <button @click="handleModalSubmit" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg">{{ isEditing ? '儲存修改' : '確認新增' }}</button>
                         </div>
                     </div>
                 </div>
@@ -155,6 +159,7 @@
                         <div v-if="stocks[selectedStockIdx].currentPrice < stocks[selectedStockIdx].cost" class="text-center py-10">
                             <p class="text-4xl mb-4">📉</p>
                             <p class="font-black text-orange-800">目前為虧損狀態</p>
+                            <p class="text-[10px] text-orange-400 mt-2 font-bold">暫無獲利可計算</p>
                         </div>
 
                         <div v-else class="space-y-6">
@@ -231,7 +236,7 @@
 
                     <div class="bg-slate-900 p-6 rounded-[2rem] text-white flex justify-between items-center shadow-2xl mt-8">
                         <div>
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">預備金總計 (採用 {{ reserveRatio * 100 }}%)</p>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">預備金總計 (採用 {{ Math.round(reserveRatio * 100) }}%)</p>
                             <p class="text-2xl font-black">${{ totalReserve.toLocaleString() }}</p>
                         </div>
                         <p class="text-3xl opacity-50">🛡️</p>
@@ -257,20 +262,25 @@
                 const stocks = ref([]);
                 const usdMode = ref(false);
                 const exchangeRate = ref(32.5); 
-                const showAddModal = ref(false);
-                const newItem = ref({ name: '', type: '個股', cost: null, shares: null, currentPrice: null });
+                
+                // 彈窗狀態與編輯邏輯
+                const showModal = ref(false);
+                const isEditing = ref(false);
+                const editingId = ref(null);
+                const modalItem = ref({ name: '', type: '個股', cost: null, shares: null, currentPrice: null });
+                
                 const selectedStockIdx = ref(null);
                 const maData = ref({ MA5: '', MA10: '', MA20: '' });
                 const monthlyEx = ref(0);
                 const reserveMonths = ref(6);
-                const reserveRatio = ref(0.1); // 預設 10%
+                const reserveRatio = ref(0.1);
                 const futureEx = ref([]);
                 const manualAssets = ref([]);
                 const manualReserve = ref(0);
                 const newManual = ref({ name: '', amount: null });
 
                 onMounted(() => {
-                    const saved = localStorage.getItem('wealth-master-v6');
+                    const saved = localStorage.getItem('wealth-master-v7');
                     if (saved) {
                         const d = JSON.parse(saved);
                         stocks.value = d.stocks || [];
@@ -286,19 +296,37 @@
                 });
 
                 watch([stocks, monthlyEx, reserveMonths, reserveRatio, futureEx, manualAssets, maData, exchangeRate, manualReserve], () => {
-                    localStorage.setItem('wealth-master-v6', JSON.stringify({
+                    localStorage.setItem('wealth-master-v7', JSON.stringify({
                         stocks: stocks.value, monthlyEx: monthlyEx.value, reserveMonths: reserveMonths.value,
                         reserveRatio: reserveRatio.value, futureEx: futureEx.value, manualAssets: manualAssets.value,
                         maData: maData.value, exchangeRate: exchangeRate.value, manualReserve: manualReserve.value
                     }));
                 }, { deep: true });
 
-                const addStock = () => {
-                    if (newItem.value.name && newItem.value.cost > 0) {
-                        stocks.value.push({ ...newItem.value, market: market.value });
-                        newItem.value = { name: '', type: '個股', cost: null, shares: null, currentPrice: null };
-                        showAddModal.value = false;
+                // 彈窗處理
+                const openAddModal = () => {
+                    isEditing.value = false;
+                    modalItem.value = { name: '', type: '個股', cost: null, shares: null, currentPrice: null };
+                    showModal.value = true;
+                };
+
+                const openEditModal = (stock) => {
+                    isEditing.value = true;
+                    editingId.value = stock.id;
+                    modalItem.value = { ...stock };
+                    showModal.value = true;
+                };
+
+                const handleModalSubmit = () => {
+                    if (!modalItem.value.name || modalItem.value.cost <= 0) return;
+                    
+                    if (isEditing.value) {
+                        const index = stocks.value.findIndex(s => s.id === editingId.value);
+                        if (index !== -1) stocks.value[index] = { ...modalItem.value };
+                    } else {
+                        stocks.value.push({ ...modalItem.value, id: Date.now(), market: market.value });
                     }
+                    showModal.value = false;
                 };
 
                 const addManual = () => {
@@ -310,7 +338,13 @@
 
                 const deleteManualAsset = (id) => { manualAssets.value = manualAssets.value.filter(item => item.id !== id); };
                 const manualAssetsReversed = computed(() => [...manualAssets.value].reverse());
-                const removeStock = (idx) => { const realIdx = stocks.value.indexOf(filteredStocks.value[idx]); stocks.value.splice(realIdx, 1); };
+                
+                const removeStock = (stock) => {
+                    if(confirm(`確定要刪除 ${stock.name} 嗎？`)) {
+                        stocks.value = stocks.value.filter(s => s.id !== stock.id);
+                    }
+                };
+
                 const filteredStocks = computed(() => stocks.value.filter(s => s.market === market.value));
                 const totalTWValue = computed(() => stocks.value.filter(s => s.market === '台股').reduce((sum, s) => sum + (s.currentPrice * s.shares), 0));
                 const totalUSValueInTWD = computed(() => {
@@ -349,9 +383,9 @@
                 });
 
                 return { 
-                    currentTab, market, stocks, newItem, addStock, removeStock, usdMode, exchangeRate,
+                    currentTab, market, stocks, showModal, isEditing, modalItem, openAddModal, openEditModal, handleModalSubmit, removeStock, usdMode, exchangeRate,
                     filteredStocks, totalTWValue, totalUSValueInTWD, totalMarketValueAll, grandTotal,
-                    getRatio, formatDisplayPrice, currentCurrencyLabel, showAddModal,
+                    getRatio, formatDisplayPrice, currentCurrencyLabel,
                     selectedStockIdx, profitCalc, maData, monthlyEx, reserveMonths, reserveRatio, futureEx, totalReserve,
                     manualAssets, newManual, addManual, deleteManualAsset, manualAssetsReversed, manualReserve
                 };
