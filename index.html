@@ -14,26 +14,18 @@
         .nav-text { font-size: 13px !important; letter-spacing: 1px !important; margin-top: 4px; }
         .main-title { letter-spacing: -0.02em; font-size: 1.75rem; line-height: 1.2; }
         .doodozz-sig { letter-spacing: 0.35em; font-size: 10px; color: #94a3b8; font-weight: 800; text-indent: 0.35em; }
-        
-        /* 統一按鈕大小 */
-        .btn-icon {
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
+        .btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; transition: all 0.2s; }
         .btn-icon:active { background-color: #f1f5f9; transform: scale(0.9); }
+        .animate-pulse-subtle { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
     <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-2xl relative">
         
         <header class="p-8 border-b bg-white sticky top-0 z-20 text-center">
-            <h1 class="main-title font-black text-slate-800 uppercase">Where is my $</h1>
-            <p class="doodozz-sig mt-2 uppercase text-blue-400/70">Designed by doodozz</p>
+            <h1 @click="clickTitle" class="main-title font-black text-slate-800 uppercase select-none">Where is my $</h1>
+            <p class="doodozz-sig mt-2 uppercase text-blue-400/70">Designed by doodozz <span v-if="isTestMode" class="text-red-500 font-black">[TEST MODE]</span></p>
         </header>
 
         <main class="p-4">
@@ -82,19 +74,6 @@
                         <button @click="openManualAdd" class="w-full bg-slate-800 text-white py-2 rounded-xl font-bold text-sm">新增項目</button>
                     </div>
                 </div>
-                <div v-if="manualModal.show" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6 backdrop-blur-sm">
-                    <div class="bg-white w-full rounded-[2.5rem] p-6 shadow-2xl">
-                        <h2 class="text-xl font-black mb-6">{{ manualModal.isEdit ? '修改' : '新增' }}項目</h2>
-                        <div class="space-y-4">
-                            <input v-model="manualModal.data.name" placeholder="項目名稱" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold">
-                            <input v-model.number="manualModal.data.amount" type="number" placeholder="金額" class="w-full p-4 bg-slate-100 rounded-2xl outline-none font-bold">
-                        </div>
-                        <div class="flex gap-4 mt-8">
-                            <button @click="manualModal.show = false" class="flex-1 py-4 font-bold text-slate-400 text-xs">取消</button>
-                            <button @click="handleManualSubmit" class="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-black">確認</button>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div v-if="currentTab === 'position'">
@@ -107,9 +86,7 @@
                             <span class="text-[10px] text-indigo-400 mr-1 font-bold">匯率</span>
                             <input v-model.number="exchangeRate" type="number" step="0.01" class="w-10 bg-transparent text-xs font-bold text-indigo-700 outline-none">
                         </div>
-                        <button @click="usdMode = !usdMode" class="bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow-md">
-                            {{ usdMode ? 'USD' : 'TWD' }}
-                        </button>
+                        <button @click="usdMode = !usdMode" class="bg-slate-800 text-white px-3 py-1.5 rounded-lg text-xs font-black shadow-md">{{ usdMode ? 'USD' : 'TWD' }}</button>
                     </div>
                 </div>
 
@@ -133,8 +110,15 @@
                 </div>
 
                 <div class="space-y-4">
-                    <div v-for="stock in filteredStocks" :key="stock.id" class="border border-slate-100 rounded-3xl p-5 bg-white card-shadow relative">
+                    <div v-for="stock in filteredStocks" :key="stock.id" 
+                        :class="['border rounded-3xl p-5 bg-white card-shadow relative transition-all', isPending(stock) ? 'border-amber-400 bg-amber-50/30' : 'border-slate-100']">
+                        
+                        <div v-if="isPending(stock)" class="absolute -top-2 left-6 bg-amber-500 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg animate-pulse-subtle">
+                            本月待確認扣款
+                        </div>
+
                         <div class="absolute top-4 right-4 flex gap-2">
+                            <button v-if="isPending(stock)" @click="confirmDeduction(stock)" class="bg-amber-100 text-amber-600 font-black text-[10px] px-2 py-1 rounded-lg mr-2">確認入帳</button>
                             <a :href="'https://www.google.com/search?q=' + (stock.market === '台股' ? 'TPE:' : '') + stock.symbol + '+stock'" target="_blank" class="btn-icon text-blue-400 text-xl">🔍</a>
                             <button @click="openEditModal(stock)" class="btn-icon text-slate-300 text-xl">✎</button>
                             <button @click="removeStock(stock)" class="btn-icon text-red-100 text-xl">✕</button>
@@ -171,20 +155,31 @@
                         <div class="space-y-4">
                             <div class="grid grid-cols-2 gap-4">
                                 <input v-model="modalItem.name" placeholder="股票名稱" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm">
-                                <input v-model="modalItem.symbol" placeholder="代號 (如: 2330)" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm">
+                                <input v-model="modalItem.symbol" placeholder="代號" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm">
                             </div>
                             <div class="grid grid-cols-2 gap-4">
-                                <input v-model.number="modalItem.cost" type="number" step="0.01" placeholder="成本" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold">
-                                <input v-model.number="modalItem.shares" type="number" placeholder="股數" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold">
+                                <input v-model.number="modalItem.cost" type="number" step="0.01" placeholder="成本" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm">
+                                <input v-model.number="modalItem.shares" type="number" placeholder="目前股數" class="p-4 bg-slate-100 rounded-2xl outline-none font-bold text-sm">
                             </div>
                             <input v-model.number="modalItem.currentPrice" type="number" step="0.01" placeholder="現價" class="w-full p-4 bg-blue-50 rounded-2xl outline-none font-bold border-2 border-blue-200">
                             
-                            <div class="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                                <span class="font-bold text-slate-500 text-sm">🚀 定期定額標籤</span>
-                                <button @click="modalItem.type = (modalItem.type === '定期定額' ? '個股' : '定期定額')" 
-                                        :class="['px-4 py-1 rounded-full text-[10px] font-black transition', modalItem.type === '定期定額' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400']">
-                                    {{ modalItem.type === '定期定額' ? 'ON' : 'OFF' }}
-                                </button>
+                            <div class="p-4 bg-slate-50 rounded-2xl space-y-3 border border-slate-100">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-500 text-xs tracking-widest uppercase">🚀 定期定額設定</span>
+                                    <button @click="modalItem.type = (modalItem.type === '定期定額' ? '個股' : '定期定額')" :class="['px-4 py-1 rounded-full text-[10px] font-black transition', modalItem.type === '定期定額' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-400']">
+                                        {{ modalItem.type === '定期定額' ? 'ON' : 'OFF' }}
+                                    </button>
+                                </div>
+                                <div v-if="modalItem.type === '定期定額'" class="grid grid-cols-2 gap-4 animate-slide-up">
+                                    <div>
+                                        <label class="text-[10px] font-black text-slate-400 block mb-1 ml-1">每月扣款日 (1-31)</label>
+                                        <input v-model.number="modalItem.deductDay" type="number" placeholder="日期" class="w-full p-3 bg-white rounded-xl outline-none font-bold text-sm border border-slate-200">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black text-slate-400 block mb-1 ml-1">每期金額 (TWD)</label>
+                                        <input v-model.number="modalItem.deductAmount" type="number" placeholder="金額" class="w-full p-3 bg-white rounded-xl outline-none font-bold text-sm border border-slate-200">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="flex gap-4 mt-8">
@@ -220,13 +215,6 @@
                             <div class="bg-white p-6 rounded-3xl shadow-sm text-center border border-orange-200">
                                 <p class="text-[10px] text-gray-400 font-black uppercase mb-2 tracking-widest">建議停利參考價</p>
                                 <p class="text-4xl font-black text-orange-600">${{ profitCalc.stopPrice.toLocaleString(undefined, {minimumFractionDigits: 2}) }}</p>
-                            </div>
-                        </div>
-                        <div class="space-y-3 pt-4 border-t border-orange-100">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">均線參考</p>
-                            <div v-for="ma in ['MA5', 'MA10', 'MA20']" class="flex items-center gap-3 bg-white/60 p-3 rounded-2xl">
-                                <span class="text-xs font-black text-slate-500 w-12">{{ ma }}</span>
-                                <input v-model="stocks[selectedStockIdx][ma]" placeholder="數值" class="bg-transparent border-none text-right w-full font-bold outline-none text-slate-700">
                             </div>
                         </div>
                     </div>
@@ -303,7 +291,11 @@
                 const showModal = ref(false);
                 const isEditing = ref(false);
                 const editingId = ref(null);
-                const modalItem = ref({ name: '', symbol: '', type: '個股', cost: null, shares: null, currentPrice: null, MA5: '', MA10: '', MA20: '' });
+                const isTestMode = ref(false);
+                const clickCount = ref(0);
+
+                // 初始資料擴展：增加 deductDay, deductAmount, lastDeductedMonth
+                const modalItem = ref({ name: '', symbol: '', type: '個股', cost: null, shares: null, currentPrice: null, MA5: '', MA10: '', MA20: '', deductDay: 1, deductAmount: 5000 });
                 const manualModal = ref({ show: false, isEdit: false, editId: null, data: { name: '', amount: null } });
                 const selectedStockIdx = ref(null);
                 const monthlyEx = ref(0);
@@ -336,24 +328,49 @@
                     }));
                 }, { deep: true });
 
-                const openAddModal = () => { isEditing.value = false; modalItem.value = { name: '', symbol: '', type: '個股', cost: null, shares: null, currentPrice: null }; showModal.value = true; };
+                const openAddModal = () => { isEditing.value = false; modalItem.value = { name: '', symbol: '', type: '個股', cost: null, shares: null, currentPrice: null, deductDay: 1, deductAmount: 5000 }; showModal.value = true; };
                 const openEditModal = (stock) => { isEditing.value = true; editingId.value = stock.id; modalItem.value = { ...stock }; showModal.value = true; };
                 const handleModalSubmit = () => {
                     if (!modalItem.value.name) return;
                     if (isEditing.value) {
                         const index = stocks.value.findIndex(s => s.id === editingId.value);
                         if (index !== -1) stocks.value[index] = { ...modalItem.value };
-                    } else { stocks.value.push({ ...modalItem.value, id: Date.now(), market: market.value }); }
+                    } else { 
+                        stocks.value.push({ ...modalItem.value, id: Date.now(), market: market.value, lastDeductedMonth: null }); 
+                    }
                     showModal.value = false;
                 };
 
+                // 定期定額邏輯
+                const isPending = (stock) => {
+                    if (stock.type !== '定期定額' || !stock.deductDay) return false;
+                    const today = isTestMode.value ? 28 : new Date().getDate();
+                    const currentMonth = new Date().getMonth();
+                    return today >= stock.deductDay && stock.lastDeductedMonth !== currentMonth;
+                };
+
+                const confirmDeduction = (stock) => {
+                    const addedShares = Math.floor((stock.deductAmount / stock.currentPrice) * 100) / 100;
+                    stock.shares = (parseFloat(stock.shares) + addedShares).toFixed(2);
+                    stock.lastDeductedMonth = new Date().getMonth();
+                    alert(`✅ ${stock.name} 扣款成功！\n已入帳 ${addedShares} 股。`);
+                };
+
+                const clickTitle = () => {
+                    clickCount.value++;
+                    if (clickCount.value === 3) {
+                        isTestMode.value = !isTestMode.value;
+                        clickCount.value = 0;
+                        alert(isTestMode.value ? "🚀 測試模式：模擬今日為 28 號" : "🌿 回到正常模式");
+                    }
+                };
+
+                // 計算屬性與其他方法 (維持原樣)
                 const filteredStocks = computed(() => stocks.value.filter(s => s.market === market.value));
                 const totalTWValue = computed(() => stocks.value.filter(s => s.market === '台股').reduce((sum, s) => sum + (s.currentPrice * s.shares), 0));
                 const totalUSValueInTWD = computed(() => stocks.value.filter(s => s.market === '美股').reduce((sum, s) => sum + (s.currentPrice * s.shares), 0) * exchangeRate.value);
                 const totalMarketValueAll = computed(() => totalTWValue.value + totalUSValueInTWD.value);
                 const grandTotal = computed(() => (totalMarketValueAll.value + (manualReserve.value || 0) + manualAssets.value.reduce((s, x) => s + (x.amount || 0), 0)));
-                
-                // 匯率切換邏輯
                 const currentCurrencyLabel = computed(() => (market.value === '美股' && usdMode.value) ? 'USD' : 'TWD');
                 const currentMarketTotalValue = computed(() => {
                     let val = market.value === '台股' ? totalTWValue.value : totalUSValueInTWD.value;
@@ -365,7 +382,6 @@
                     if (stock.market === '美股' && !usdMode.value) val *= exchangeRate.value;
                     return val;
                 };
-
                 const formatPrecisePrice = (val) => val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 const getRatio = (stock) => {
                     if (totalMarketValueAll.value === 0) return 0;
@@ -381,16 +397,13 @@
                     let mRatio = (mTotal * (market.value === '美股' ? exchangeRate.value : 1)) / totalMarketValueAll.value * 100;
                     return { profit: ((mTotal / mCost) - 1) * 100, ratio: mRatio };
                 });
-
                 const profitCalc = computed(() => {
                     if (selectedStockIdx.value === null || !stocks.value[selectedStockIdx.value]) return { realized:0, remainingCost:0, stopPrice:0 };
                     const s = stocks.value[selectedStockIdx.value];
                     const realized = (s.currentPrice - s.cost) * (s.shares / 2);
                     return { realized, remainingCost: s.cost - (realized / (s.shares / 2)), stopPrice: s.currentPrice - (realized / 2 / (s.shares / 2)) };
                 });
-
                 const totalReserve = computed(() => ((monthlyEx.value || 0) * reserveMonths.value) + (totalMarketValueAll.value * reserveRatio.value) + futureEx.value.reduce((s, x) => s + (x.amount || 0), 0));
-                
                 const openManualAdd = () => { manualModal.value = { show: true, isEdit: false, editId: null, data: { name: '', amount: null } }; };
                 const openManualEdit = (m) => { manualModal.value = { show: true, isEdit: true, editId: m.id, data: { ...m } }; };
                 const handleManualSubmit = () => {
@@ -409,7 +422,8 @@
                     filteredStocks, totalTWValue, totalUSValueInTWD, totalMarketValueAll, grandTotal, marketStats,
                     getRatio, formatPrecisePrice, currentCurrencyLabel, currentMarketTotalValue, calculateStockCurrentValue,
                     selectedStockIdx, profitCalc, monthlyEx, reserveMonths, reserveRatio, futureEx, totalReserve,
-                    manualAssets, manualReserve, manualModal, openManualAdd, openManualEdit, handleManualSubmit, deleteManualAsset
+                    manualAssets, manualReserve, manualModal, openManualAdd, openManualEdit, handleManualSubmit, deleteManualAsset,
+                    isPending, confirmDeduction, isTestMode, clickTitle
                 };
             }
         }).mount('#app');
